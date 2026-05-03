@@ -1,0 +1,23 @@
+# Secrets — never commit
+.env
+
+# Runtime logs
+router.log
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.python-version
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
