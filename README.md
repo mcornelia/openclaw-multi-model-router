@@ -1,6 +1,6 @@
 # OpenClaw Multi-Model Router
 
-A three-model AI setup that routes requests intelligently between local models and Claude. Simple questions stay local (free, private, fast). Complex reasoning escalates to the Claude API.
+A four-model AI setup that routes requests intelligently between local models and Claude. Simple questions stay local (free, private, fast). Code goes to Qwen, photos go to Llama Vision, and complex reasoning escalates to the Claude API.
 
 **Prerequisite**: [OpenClaw](https://mcornelia.github.io/openclaw-setup-guide) already running with your agent (the "Operator") configured.
 
@@ -10,13 +10,14 @@ A three-model AI setup that routes requests intelligently between local models a
 
 ```
 Your message → the Operator (your local agent)
-                ├── General Q&A, chat, trivia  → [Gemma]   Gemma 4 31B        (local, free)
-                ├── Code tasks                 → [Qwen]    Qwen 2.5 Coder 32B (local, free)
-                └── Complex reasoning,         → [Claude]  Claude Sonnet      (API)
+                ├── General Q&A, chat, trivia  → [Gemma]   Gemma 4 31B          (local, free)
+                ├── Code tasks                 → [Qwen]    Qwen 2.5 Coder 32B   (local, free)
+                ├── Photo / image attached     → [Llama]   Llama 3.2 Vision 11B (local, free)
+                └── Complex reasoning,         → [Claude]  Claude Sonnet        (API)
                     personal context, tools
 ```
 
-Every response is labeled `[Gemma]`, `[Qwen]`, or `[Claude]` so you always know which model answered.
+Every response is labeled `[Gemma]`, `[Qwen]`, `[Llama]`, or `[Claude]` so you always know which model answered.
 
 > **Customize the labels.** I personally use `[EDI]` for Claude (named after the AI in Mass Effect) and a custom name for my Operator. Pick whatever fits your setup — just keep the labeling consistent so you always know who's talking.
 
@@ -54,12 +55,14 @@ Verify: `ollama list`
 ```
 ollama pull gemma4:31b
 ollama pull qwen2.5-coder:32b
+ollama pull llama3.2-vision:11b
 ```
 
 - **Gemma 4 31B** — Google DeepMind. General-purpose, 256K context, multimodal.
 - **Qwen 2.5 Coder 32B** — Alibaba. Coding specialist, 92 languages.
+- **Llama 3.2 Vision 11B** — Meta. Lightweight multimodal model for image understanding. Faster and more efficient than routing photos through the general-purpose model.
 
-Each is ~19–20 GB. Disk needed: ~40 GB. RAM needed: 24 GB (one model loads at a time).
+Gemma and Qwen are ~19–20 GB each. Llama Vision is ~7 GB. Disk needed: ~47 GB. RAM needed: 24 GB (one model loads at a time).
 
 ---
 
@@ -113,12 +116,13 @@ The router will now start automatically every time you log in, and restart if it
 Add this section to `~/.openclaw/workspace/AGENTS.md` before the "Make It Yours" section:
 
 ```markdown
-## Smart Routing — Three-Way: Gemma / Qwen / Claude
+## Smart Routing — Four-Way: Gemma / Qwen / Llama / Claude
 
 | Model              | Label    | Role                    |
 |--------------------|----------|-------------------------|
 | Gemma 4 31B        | [Gemma]  | On-premise generalist   |
 | Qwen 2.5 Coder 32B | [Qwen]   | Coding agent            |
+| Llama 3.2 Vision 11B | [Llama]  | Image understanding     |
 | Claude (you)       | [Claude] | Deep reasoning          |
 
 You are the Operator — direct the models, don't label yourself.
@@ -126,6 +130,8 @@ You are the Operator — direct the models, don't label yourself.
 **Route to Gemma**: trivia, definitions, casual chat, greetings, sign-offs, anything under ~20 words with no technical content.
 
 **Route to Qwen**: writing/debugging/explaining code, scripting, architecture, anything involving a code block or programming language.
+
+**Route to Llama Vision**: any message with a photo or image attachment, visual identification, reading text in images, describing what's in a photo.
 
 **Keep with Claude**: multi-step reasoning, analysis, tradeoffs, personal context (user's family/work/schedule), tool use, long input (>500 words), anything requiring Bash/file/web access.
 
@@ -143,7 +149,14 @@ You are the Operator — direct the models, don't label yourself.
       -d '{"model":"qwen2.5-coder:32b","messages":[{"role":"user","content":"PROMPT"}],"stream":false}' \
       | /opt/homebrew/bin/python3.11 -c "import sys,json; print(json.load(sys.stdin)['message']['content'])"
 
-Always start every reply with `[Gemma]`, `[Qwen]`, or `[Claude]`.
+**How to call Llama Vision** (Bash tool):
+
+    curl -s --max-time 90 http://localhost:11434/api/chat \
+      -H "Content-Type: application/json" \
+      -d '{"model":"llama3.2-vision:11b","messages":[{"role":"user","content":"PROMPT","images":["BASE64_IMAGE"]}],"stream":false}' \
+      | /opt/homebrew/bin/python3.11 -c "import sys,json; print(json.load(sys.stdin)['message']['content'])"
+
+Always start every reply with `[Gemma]`, `[Qwen]`, `[Llama]`, or `[Claude]`.
 If a local model times out, fall back to Claude silently and label `[Claude]`.
 ```
 
@@ -175,6 +188,7 @@ Both should respond within 30 seconds (longer on first call as the model loads i
 | ---------------------------------------- | ----------------- |
 | Greeting, joke, trivia, simple question  | Gemma             |
 | Code, debugging, scripting, architecture | Qwen              |
+| Photo or image attached, visual ID       | Llama Vision      |
 | Planning, analysis, personal info, tools | Claude            |
 | Local model timeout                      | Claude (fallback) |
 
@@ -182,22 +196,23 @@ Both should respond within 30 seconds (longer on first call as the model loads i
 
 ## Troubleshooting
 
-| Problem               | Fix                                                            |
-| --------------------- | -------------------------------------------------------------- |
-| Ollama not responding | `brew services restart ollama`                                 |
-| Model not found       | `ollama pull gemma4:31b` or `ollama pull qwen2.5-coder:32b`    |
-| Slow first response   | Normal — model loads on first query (~30 sec)                  |
-| Router won't start    | `cat ~/.openclaw/workspace/openclaw-router/router.log`         |
-| Out of memory         | Restart Ollama: `brew services restart ollama`                 |
-| API key not set       | Check `.env` exists in `openclaw-router/` and contains the key |
+| Problem               | Fix                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| Ollama not responding | `brew services restart ollama`                                                         |
+| Model not found       | `ollama pull gemma4:31b` or `ollama pull qwen2.5-coder:32b` or `ollama pull llama3.2-vision:11b` |
+| Slow first response   | Normal — model loads on first query (~30 sec)                                          |
+| Router won't start    | `cat ~/.openclaw/workspace/openclaw-router/router.log`                                 |
+| Out of memory         | Restart Ollama: `brew services restart ollama`                                         |
+| Photos not routing    | Check AGENTS.md includes the Llama Vision routing rules                                |
+| API key not set       | Check `.env` exists in `openclaw-router/` and contains the key                         |
 
 ---
 
 ## Why this exists
 
-Running everything through the Claude API gets expensive fast, especially for casual chat. Running everything locally means slow, inconsistent answers on hard problems. This router gives you the best of both: cheap local speed for the 80% of requests that don't need a frontier model, and Claude's deep reasoning for the 20% that do.
+Running everything through the Claude API gets expensive fast, especially for casual chat. Running everything locally means slow, inconsistent answers on hard problems. This router gives you the best of both: cheap local speed for the 80% of requests that don't need a frontier model, and Claude's deep reasoning for the 20% that do. Photos go to a lightweight dedicated vision model instead of burning tokens on the general-purpose model.
 
-The labels (`[Gemma]`, `[Qwen]`, `[Claude]`) make the trade-off transparent. You always know which model answered, so you can tell the Operator to "ask Claude this one" if the local answer was weak.
+The labels (`[Gemma]`, `[Qwen]`, `[Llama]`, `[Claude]`) make the trade-off transparent. You always know which model answered, so you can tell the Operator to "ask Claude this one" if the local answer was weak.
 
 ---
 
