@@ -218,7 +218,7 @@ The labels (`[Gemma]`, `[Qwen]`, `[Llama]`, `[Claude]`) make the trade-off trans
 
 ## License
 
-MIT — do whatever you want.
+The router's original code, configuration examples, and documentation are licensed under the [MIT License](LICENSE). Dependencies, model weights, and external services retain their own licenses and terms.
 
 ---
 
